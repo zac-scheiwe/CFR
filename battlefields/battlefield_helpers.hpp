@@ -53,15 +53,16 @@ unsigned int nChoosek(unsigned int n, unsigned int k ) {
 
 // function to find all n–digit numbers with a sum of digits equal
 // to `target` in a bottom-up manner
-void find_layouts(string* store, int& index, string layout, const int& n, const int& target, const char& MAX_REPR) {
+void find_layouts(string* store, int& index, string layout, const int& n, const int& target) {
+    const char MAX_CHAR = '0' + target;
     // if the number is less than n–digit and its sum of digits is
     // less than the given sum
     if (n && target >= 0) {
         char d = '0';
         // consider every valid digit and put it in the current
         // index and recur for the next index
-        while (d <= MAX_REPR) {
-            find_layouts(store, index, layout + d, n - 1, target - (d - '0'), MAX_REPR);
+        while (d <= MAX_CHAR) {
+            find_layouts(store, index, layout + d, n - 1, target - (d - '0'));
             d++;
         }
     }

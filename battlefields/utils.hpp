@@ -6,23 +6,34 @@ float get_random_decimal() {
     return (float) rand()/RAND_MAX;
 }
 
-void print_array(float* array) {
-    for (int i=0; i<3; i++) {
+template <typename T>
+void print_array(T* array, int num_elements) {
+    for (int i=0; i<num_elements; i++) {
         cout << array[i] << " ";
     }
     cout << "\n";
 }
 
+template <typename T>
+T* add_arrays(T* a, T* b, int num_elements) {
+    T* c = new T[num_elements];
+    for (int i=0; i<num_elements; i++) {
+        c[i] = a[i] + b[i];
+    }
+    return c;
+}
+
 class PSR_Trainer {
     public:
-    PSR_Trainer(int seed=0) {
+    int NUM_ACTIONS;
+    PSR_Trainer(const int& N, const int& seed=0) {
+        NUM_ACTIONS = N;
         srand(seed);
     }
-    int PAPER = 0, SCISSORS = 1, ROCK = 2, NUM_ACTIONS = 3;
 
-    int* regretSum = new int[NUM_ACTIONS];
-    float* strategySum = new float[NUM_ACTIONS];
-    float OPP_STRATEGY[3] = { 0.4, 0.3, 0.3 };
+    int *my_regretSum = new int[NUM_ACTIONS], *other_regretSum = new int[NUM_ACTIONS];
+    float *my_strategySum = new float[NUM_ACTIONS], *other_strategySum = new float[NUM_ACTIONS];
+    float *my_avgStrategy = new float[NUM_ACTIONS], *other_avgStrategy = new float[NUM_ACTIONS];
 
     // Get current mixed strategy through regret-matching
     float* get_strategy(const int* regretSum) {
@@ -44,8 +55,10 @@ class PSR_Trainer {
         } else {
             fill_n(strategy, NUM_ACTIONS, 1.0 / NUM_ACTIONS);
         }
+
         return strategy;
     }
+
 
     // Get random action according to mixed-strategy distribution
     int get_action(const float* strategy) {
@@ -57,33 +70,22 @@ class PSR_Trainer {
         }
         return -1;
     }
-
-    void train(const int& iterations) {
-        float* strategy; 
-        int my_action;
-        int other_action;
-
-        for (int i = 0; i < iterations; i++) {
-            // Get regret-matched mixed-strategy actions
-            strategy = get_strategy(regretSum);
-            my_action = get_action(strategy);
-            other_action = get_action(OPP_STRATEGY);
-
+    template <typename T>
+    int* get_regrets(const T& my_action, const T& other_action) {
             // Compute action utilities
-            short int* action_utility = new short int[NUM_ACTIONS];
-            action_utility[other_action == NUM_ACTIONS - 1 ? 0 : other_action + 1] = 1;
-            action_utility[other_action == 0 ? NUM_ACTIONS - 1 : other_action - 1] = -1;
+            int* action_utilities = new int[NUM_ACTIONS];
+            action_utilities[other_action == NUM_ACTIONS - 1 ? 0 : other_action + 1] = 1;
+            action_utilities[other_action == 0 ? NUM_ACTIONS - 1 : other_action - 1] = -1;
 
             // Accumulate action regrets and strategy frequencies
-            auto& my_utility = action_utility[my_action];
+            int my_utility = action_utilities[my_action];
             for (int a = 0; a < NUM_ACTIONS; a++) {
-                regretSum[a] += action_utility[a] - my_utility;
-                strategySum[a] += strategy[a];
+                action_utilities[a] -= my_utility;
             }
-        }
+            return action_utilities;
     }
 
-    float* get_average_strategy() {
+    float* get_average_strategy(float* strategySum) {
         auto* avg_strategy = new float[NUM_ACTIONS];
         float normalizing_sum = 0.0;
         for (int a = 0; a < NUM_ACTIONS; a++) {
@@ -93,6 +95,40 @@ class PSR_Trainer {
             avg_strategy[a] = strategySum[a] / normalizing_sum;
         }
         return avg_strategy;
+    }
+
+    void train(const int& iterations) {
+        float *my_strategy, *other_strategy;
+        int my_action, other_action;
+        int *my_regrets = new int[NUM_ACTIONS], *other_regrets = new int[NUM_ACTIONS]; 
+
+        for (int i = 0; i < iterations; i++) {
+            // Get regret-matched mixed-strategy actions
+            my_strategy = get_strategy(my_regretSum);
+            other_strategy = get_strategy(other_regretSum);
+
+            my_strategySum = add_arrays(my_strategySum, my_strategy, NUM_ACTIONS);
+            other_strategySum = add_arrays(other_strategySum, other_strategy, NUM_ACTIONS);
+
+            my_action = get_action(my_strategy);
+            other_action = get_action(other_strategy);
+
+            my_regrets = get_regrets(my_action, other_action);
+            other_regrets = get_regrets(other_action, my_action);
+
+            my_regretSum = add_arrays(my_regretSum, my_regrets, NUM_ACTIONS);
+            other_regretSum = add_arrays(other_regretSum, other_regrets, NUM_ACTIONS);
+
+            my_avgStrategy = get_average_strategy(my_strategySum);
+            other_avgStrategy = get_average_strategy(other_strategySum);
+        }
+    }
+
+    void print_stragies() {
+        cout << "My strategy:    ";
+        print_array(my_avgStrategy, NUM_ACTIONS);
+        cout << "Other strategy: ";
+        print_array(other_avgStrategy, NUM_ACTIONS);
     }
 
 };

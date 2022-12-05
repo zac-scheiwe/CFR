@@ -4,13 +4,17 @@ using namespace std;
 
 int main() {
     const int SOLDIERS = 5, BATTLEFIELDS = 3;
-    const int NUM_LAYOUTS = nChoosek(SOLDIERS + BATTLEFIELDS- 1, BATTLEFIELDS - 1);
-    const char MAX_REP = '0' + SOLDIERS;
+    const int NUM_LAYOUTS = nChoosek(SOLDIERS + BATTLEFIELDS - 1, BATTLEFIELDS - 1);
     string* store = new string[NUM_LAYOUTS]; 
     int index = 0;
     string layout;
-    find_layouts(store, index, layout, BATTLEFIELDS, SOLDIERS, MAX_REP);
+    find_layouts(store, index, layout, BATTLEFIELDS, SOLDIERS);
     // print_array(store, NUM_LAYOUTS);
 
-    cout << get_utility(store[0], store[19]);
+
+    auto* model = new PSR_Trainer(NUM_LAYOUTS);
+    model->train(1);
+    model->print_stragies();
+
+    // cout << get_utility(store[0], store[19]);
 }
