@@ -1,5 +1,7 @@
 #include <cstdlib>
 #include <iostream>
+#include <vector>
+#include <string>
 using namespace std;
 
 float get_random_decimal() {
@@ -23,13 +25,31 @@ T* add_arrays(T* a, T* b, int num_elements) {
     return c;
 }
 
-class PSR_Trainer {
-    public:
-    int NUM_ACTIONS;
-    PSR_Trainer(const int& N, const int& seed=0) {
-        NUM_ACTIONS = N;
-        srand(seed);
+const int nChoosek(int n, int k ) {
+    if (k > n) return 0;
+    if (k * 2 > n) k = n-k;
+    if (k == 0) return 1;
+
+    int result = n;
+    for (int i = 2; i <= k; ++i) {
+        result *= (n-i+1);
+        result /= i;
     }
+    return result;
+}
+
+class Battlefield_Trainer {
+    public:
+    int SOLDIERS, BATTLEFIELDS, NUM_ACTIONS;
+    Battlefield_Trainer(const int& S, const int& N, int seed=0) {
+        srand(seed);
+        SOLDIERS = S;
+        BATTLEFIELDS = N;
+        NUM_ACTIONS = nChoosek(SOLDIERS + BATTLEFIELDS - 1, BATTLEFIELDS - 1);
+    }
+
+    vector<string> layouts;
+    vector<int*> utility_table;
 
     int *my_regretSum = new int[NUM_ACTIONS], *other_regretSum = new int[NUM_ACTIONS];
     float *my_strategySum = new float[NUM_ACTIONS], *other_strategySum = new float[NUM_ACTIONS];
@@ -55,10 +75,8 @@ class PSR_Trainer {
         } else {
             fill_n(strategy, NUM_ACTIONS, 1.0 / NUM_ACTIONS);
         }
-
         return strategy;
     }
-
 
     // Get random action according to mixed-strategy distribution
     int get_action(const float* strategy) {
@@ -70,19 +88,76 @@ class PSR_Trainer {
         }
         return -1;
     }
-    template <typename T>
-    int* get_regrets(const T& my_action, const T& other_action) {
-            // Compute action utilities
-            int* action_utilities = new int[NUM_ACTIONS];
-            action_utilities[other_action == NUM_ACTIONS - 1 ? 0 : other_action + 1] = 1;
-            action_utilities[other_action == 0 ? NUM_ACTIONS - 1 : other_action - 1] = -1;
-
-            // Accumulate action regrets and strategy frequencies
-            int my_utility = action_utilities[my_action];
-            for (int a = 0; a < NUM_ACTIONS; a++) {
-                action_utilities[a] -= my_utility;
+    
+    // function to find all n–digit numbers with a sum of digits equal
+    // to `target` in a bottom-up manner
+    void recursive_fill(vector<string>& layouts, string layout, const int& n, const int& target) {
+        const char MAX_CHAR = '0' + target;
+        // if the number is less than n–digit and its sum of digits is
+        // less than the given sum
+        if (n && target >= 0) {
+            char d = '0';
+            // consider every valid digit and put it in the current
+            // index and recur for the next index
+            while (d <= MAX_CHAR) {
+                recursive_fill(layouts, layout + d, n - 1, target - (d - '0'));
+                d++;
             }
-            return action_utilities;
+        }
+        // if the number becomes n–digit and its sum of digits is
+        // equal to the given sum, print it
+        else if (n == 0 && target == 0) {
+            layouts.push_back(layout);
+            string abc = layout;
+        }
+    }
+
+    // Generate 1D array of soldier layouts
+    vector<string> get_layouts() {
+        string layout;
+        recursive_fill(layouts, layout, BATTLEFIELDS, SOLDIERS);
+        return layouts;
+    }
+
+    int calculate_utility(vector<string>& layouts, int my_action, int other_action) {
+        string my_layout = layouts[my_action];
+        string other_layout = layouts[other_action]; 
+
+        int utility = 0;
+        int soldier_diff;
+        for (int i=0; i<NUM_ACTIONS; i++) {
+            soldier_diff = my_layout[i] - other_layout[i];
+            if (soldier_diff > 0) utility++;
+            else if (soldier_diff < 0) utility--;
+        }
+        return utility;
+    }
+
+
+    vector<int*> get_utility_table(vector<string>& layouts) {
+        // utility_table.reserve(NUM_ACTIONS);
+        for (int j = 0; j < NUM_ACTIONS; j++) {
+            int* row = new int[NUM_ACTIONS];
+            for (int i = 0; i < j; i++) {
+                row[i] = - utility_table[i][j];
+            }
+            for (int i = j; i < NUM_ACTIONS; i++) {
+                row[i] = calculate_utility(layouts, i, j);
+            }
+            utility_table.push_back(row);
+        }
+        return utility_table;
+    }
+
+    int* get_regrets(const vector<int*>& utility_table, const int& my_action, const int& other_action) {
+        int* regrets = new int[NUM_ACTIONS];
+        int* possible_utilities = utility_table[other_action];
+
+        int my_utility = possible_utilities[my_action];
+        for (int a = 0; a < NUM_ACTIONS; a++) {
+            regrets[a] -= my_utility;
+        }
+        return regrets;
     }
 
     float* get_average_strategy(float* strategySum) {
@@ -97,7 +172,14 @@ class PSR_Trainer {
         return avg_strategy;
     }
 
+    void problem_setup() {
+        layouts = get_layouts();
+        utility_table = get_utility_table(layouts);
+    }
+
     void train(const int& iterations) {
+        problem_setup();
+
         float *my_strategy, *other_strategy;
         int my_action, other_action;
         int *my_regrets = new int[NUM_ACTIONS], *other_regrets = new int[NUM_ACTIONS]; 
@@ -113,8 +195,8 @@ class PSR_Trainer {
             my_action = get_action(my_strategy);
             other_action = get_action(other_strategy);
 
-            my_regrets = get_regrets(my_action, other_action);
-            other_regrets = get_regrets(other_action, my_action);
+            my_regrets = get_regrets(utility_table, my_action, other_action);
+            other_regrets = get_regrets(utility_table, other_action, my_action);
 
             my_regretSum = add_arrays(my_regretSum, my_regrets, NUM_ACTIONS);
             other_regretSum = add_arrays(other_regretSum, other_regrets, NUM_ACTIONS);
