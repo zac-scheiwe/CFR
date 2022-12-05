@@ -20,56 +20,65 @@ class PSR_Trainer {
     }
     int PAPER = 0, SCISSORS = 1, ROCK = 2, NUM_ACTIONS = 3;
 
-    float* regretSum = new float[NUM_ACTIONS];
-    float* strategy = new float[NUM_ACTIONS];
+    int* regretSum = new int[NUM_ACTIONS];
     float* strategySum = new float[NUM_ACTIONS];
-    float oppStrategy[3] = { 0.4, 0.3, 0.3 };
+    float OPP_STRATEGY[3] = { 0.4, 0.3, 0.3 };
 
     // Get current mixed strategy through regret-matching
-    float* get_strategy() {
-        float normalizing_sum = 0;
+    float* get_strategy(const int* regretSum) {
+        int* positive_regret_sums = new int[NUM_ACTIONS];
+        int normalizing_sum = 0;
+
         for (int a = 0; a < NUM_ACTIONS; a++) {
-            strategy[a] = regretSum[a] > 0 ? regretSum[a] : 0;
-            normalizing_sum += strategy[a];
-        }
-        for (int a = 0; a < NUM_ACTIONS; a++) {
-            if (normalizing_sum > 0) {
-                strategy[a] /= normalizing_sum;
-            } else {
-                strategy[a] = 1.0 / NUM_ACTIONS;
+            if (regretSum[a] > 0) {
+                positive_regret_sums[a] = regretSum[a];
+                normalizing_sum += positive_regret_sums[a];
             }
-            strategySum[a] += strategy[a];
+        }
+
+        float* strategy = new float[NUM_ACTIONS];
+        if (normalizing_sum > 0) {
+            for (int a = 0; a < NUM_ACTIONS; a++) {
+                strategy[a] = (float) positive_regret_sums[a] / (float) normalizing_sum;
+            }
+        } else {
+            fill_n(strategy, NUM_ACTIONS, 1.0 / NUM_ACTIONS);
         }
         return strategy;
     }
 
     // Get random action according to mixed-strategy distribution
-    int get_action(float* strategy) {
+    int get_action(const float* strategy) {
         float r = get_random_decimal();
         float F = 0.0;
         for (int a=0; a<NUM_ACTIONS; a++) {
             F += strategy[a];
-            if (r < F) return a;
+            if (r <= F) return a;
         }
         return -1;
     }
 
-    void train(int iterations) {
-        auto* action_utility = new float[NUM_ACTIONS];
+    void train(const int& iterations) {
+        float* strategy; 
+        int my_action;
+        int other_action;
+
         for (int i = 0; i < iterations; i++) {
             // Get regret-matched mixed-strategy actions
-            float* strategy = get_strategy();
-            int my_action = get_action(strategy);
-            int other_action = get_action(oppStrategy);
+            strategy = get_strategy(regretSum);
+            my_action = get_action(strategy);
+            other_action = get_action(OPP_STRATEGY);
 
             // Compute action utilities
-            action_utility[other_action] = 0;
+            short int* action_utility = new short int[NUM_ACTIONS];
             action_utility[other_action == NUM_ACTIONS - 1 ? 0 : other_action + 1] = 1;
             action_utility[other_action == 0 ? NUM_ACTIONS - 1 : other_action - 1] = -1;
 
-            // Accumulate action regrets
+            // Accumulate action regrets and strategy frequencies
+            auto& my_utility = action_utility[my_action];
             for (int a = 0; a < NUM_ACTIONS; a++) {
-                regretSum[a] += action_utility[a] - action_utility[my_action];
+                regretSum[a] += action_utility[a] - my_utility;
+                strategySum[a] += strategy[a];
             }
         }
     }
@@ -81,11 +90,7 @@ class PSR_Trainer {
             normalizing_sum += strategySum[a];
         }
         for (int a = 0; a < NUM_ACTIONS; a++) {
-            if (normalizing_sum > 0) {
-                avg_strategy[a] = strategySum[a] / normalizing_sum;
-            } else {
-                avg_strategy[a] = 1.0 / NUM_ACTIONS;
-            }
+            avg_strategy[a] = strategySum[a] / normalizing_sum;
         }
         return avg_strategy;
     }
