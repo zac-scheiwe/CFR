@@ -1,15 +1,16 @@
 #include "utils.hpp"
+#include "battlefield_helpers.hpp"
+using namespace std;
 
 int main() {
-    int soldiers = 12;
-    int battlefields = 3;
-    const int NUM_LAYOUTS = nChoosek(soldiers + battlefields - 1, battlefields - 1);
+    const int SOLDIERS = 5, BATTLEFIELDS = 3;
+    const int NUM_LAYOUTS = nChoosek(SOLDIERS + BATTLEFIELDS- 1, BATTLEFIELDS - 1);
+    const char MAX_REP = '0' + SOLDIERS;
     string* store = new string[NUM_LAYOUTS]; 
     int index = 0;
     string layout;
-    char max_rep = '0' + soldiers;
-    findNums(store, index, layout, max_rep, battlefields, soldiers);
+    find_layouts(store, index, layout, BATTLEFIELDS, SOLDIERS, MAX_REP);
     // print_array(store, NUM_LAYOUTS);
 
-    
+    cout << get_utility(store[0], store[19]);
 }
