@@ -1,7 +1,9 @@
 #include <cstdlib>
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <string>
+#include <algorithm>
 using namespace std;
 
 float get_random_decimal() {
@@ -9,20 +11,22 @@ float get_random_decimal() {
 }
 
 template <typename T>
-void print_array(T* array, int num_elements) {
-    for (int i=0; i<num_elements; i++) {
-        cout << array[i] << " ";
+void print_vector(T& vec) {
+    for (int i=0; i<vec.size(); i++) {
+        // cout << vec[i] << " ";
+        cout << setw(6) << vec[i] << " ";
     }
     cout << "\n";
 }
 
 template <typename T>
-T* add_arrays(T* a, T* b, int num_elements) {
-    T* c = new T[num_elements];
-    for (int i=0; i<num_elements; i++) {
-        c[i] = a[i] + b[i];
+T sum_arrays(T& a, T& b) {
+    T result(a.size());
+    for (int i=0; i<a.size(); i++) {
+        result[i] = a[i] + b[i];
     }
-    return c;
+    return result;
+    // transform(a.begin(), a.end(), b.begin(), a.begin(), plus<int>());
 }
 
 const int nChoosek(int n, int k ) {
@@ -40,25 +44,40 @@ const int nChoosek(int n, int k ) {
 
 class Battlefield_Trainer {
     public:
-    int SOLDIERS, BATTLEFIELDS;
+    int SOLDIERS, BATTLEFIELDS, NUM_ACTIONS;
+
+    vector<string> layouts;
+    vector<vector<int>> utility_table;
+
+    vector<int> myRegretSum, otherRegretSum;
+    vector<float> myStrategySum, otherStrategySum;
+    vector<float> myAvgStrategy, otherAvgStrategy;
+
+    vector<string> sorted_layouts;
+    vector<float> sorted_myAvgStrategy;
+    vector<float> sorted_otherAvgStrategy;
+
     Battlefield_Trainer(const int& S, const int& N, int seed=0) {
         srand(seed);
         SOLDIERS = S;
         BATTLEFIELDS = N;
-        // NUM_ACTIONS = nChoosek(SOLDIERS + BATTLEFIELDS - 1, BATTLEFIELDS - 1);
+        NUM_ACTIONS = nChoosek(SOLDIERS + BATTLEFIELDS - 1, BATTLEFIELDS - 1);
+        
+        myRegretSum.resize(NUM_ACTIONS);
+        otherRegretSum.resize(NUM_ACTIONS);
+        myStrategySum.resize(NUM_ACTIONS);
+        otherStrategySum.resize(NUM_ACTIONS);
+        myAvgStrategy.resize(NUM_ACTIONS);
+        otherAvgStrategy.resize(NUM_ACTIONS);
+        sorted_layouts.resize(NUM_ACTIONS);
+        sorted_myAvgStrategy.resize(NUM_ACTIONS);
+        sorted_otherAvgStrategy.resize(NUM_ACTIONS);
     }
-    const int NUM_ACTIONS = 21;
 
-    vector<string> layouts;
-    vector<int*> utility_table;
-
-    int *my_regretSum = new int[NUM_ACTIONS], *other_regretSum = new int[NUM_ACTIONS];
-    float *my_strategySum = new float[NUM_ACTIONS], *other_strategySum = new float[NUM_ACTIONS];
-    float *my_avgStrategy = new float[NUM_ACTIONS], *other_avgStrategy = new float[NUM_ACTIONS];
 
     // Get current mixed strategy through regret-matching
-    float* get_strategy(const int* regretSum) {
-        int* positive_regret_sums = new int[NUM_ACTIONS];
+    vector<float> get_strategy(const vector<int>& regretSum) {
+        vector<int> positive_regret_sums(NUM_ACTIONS);
         int normalizing_sum = 0;
 
         for (int a = 0; a < NUM_ACTIONS; a++) {
@@ -68,19 +87,20 @@ class Battlefield_Trainer {
             }
         }
 
-        float* strategy = new float[NUM_ACTIONS];
+        vector<float> strategy(NUM_ACTIONS);
         if (normalizing_sum > 0) {
             for (int a = 0; a < NUM_ACTIONS; a++) {
                 strategy[a] = (float) positive_regret_sums[a] / (float) normalizing_sum;
             }
         } else {
-            fill_n(strategy, NUM_ACTIONS, 1.0 / NUM_ACTIONS);
+            float uniform_probability = 1.0 / NUM_ACTIONS;
+            fill(strategy.begin(), strategy.end(), uniform_probability);
         }
         return strategy;
     }
 
     // Get random action according to mixed-strategy distribution
-    int get_action(const float* strategy) {
+    int get_action(const vector<float>& strategy) {
         float r = get_random_decimal();
         float F = 0.0;
         for (int a=0; a<NUM_ACTIONS; a++) {
@@ -109,7 +129,6 @@ class Battlefield_Trainer {
         // equal to the given sum, print it
         else if (n == 0 && target == 0) {
             layouts.push_back(layout);
-            string abc = layout;
         }
     }
 
@@ -120,7 +139,7 @@ class Battlefield_Trainer {
         return layouts;
     }
 
-    int calculate_utility(vector<string>& layouts, int my_action, int other_action) {
+    int calculate_utility(const vector<string>& layouts, const int& my_action, const int& other_action) {
         string my_layout = layouts[my_action];
         string other_layout = layouts[other_action]; 
 
@@ -137,10 +156,10 @@ class Battlefield_Trainer {
     }
 
 
-    vector<int*> get_utility_table(vector<string>& layouts) {
+    vector<vector<int>> get_utility_table(const vector<string>& layouts) {
         // utility_table.reserve(NUM_ACTIONS);
         for (int j = 0; j < NUM_ACTIONS; j++) {
-            int* row = new int[NUM_ACTIONS];
+            vector<int> row(NUM_ACTIONS);
             for (int i = 0; i < j; i++) {
                 row[i] = - utility_table[i][j];
             }
@@ -152,9 +171,9 @@ class Battlefield_Trainer {
         return utility_table;
     }
 
-    int* get_regrets(const vector<int*>& utility_table, const int& my_action, const int& other_action) {
-        int* regrets = new int[NUM_ACTIONS];
-        int* possible_utilities = utility_table[other_action];
+    vector<int> get_regrets(const vector<vector<int>>& utility_table, const int& my_action, const int& other_action) {
+        vector<int> regrets(NUM_ACTIONS);
+        vector<int> possible_utilities = utility_table[other_action];
 
         int my_utility = possible_utilities[my_action];
         for (int a = 0; a < NUM_ACTIONS; a++) {
@@ -163,8 +182,8 @@ class Battlefield_Trainer {
         return regrets;
     }
 
-    float* get_average_strategy(float* strategySum) {
-        auto* avg_strategy = new float[NUM_ACTIONS];
+    vector<float> get_average_strategy(const vector<float>& strategySum) {
+        vector<float> avg_strategy(NUM_ACTIONS);
         float normalizing_sum = 0.0;
         for (int a = 0; a < NUM_ACTIONS; a++) {
             normalizing_sum += strategySum[a];
@@ -180,20 +199,27 @@ class Battlefield_Trainer {
         utility_table = get_utility_table(layouts);
     }
 
+    void post_train() {
+        auto order = get_reverse_ordering(myAvgStrategy);
+
+        sorted_layouts = sort_from_ref(layouts, order);
+        sorted_myAvgStrategy = sort_from_ref(myAvgStrategy, order);
+        sorted_otherAvgStrategy = sort_from_ref(otherAvgStrategy, order);
+    }
+
     void train(const int& iterations) {
         problem_setup();
 
-        float *my_strategy, *other_strategy;
+        vector<float> my_strategy(NUM_ACTIONS), other_strategy(NUM_ACTIONS);
         int my_action, other_action;
-        int *my_regrets = new int[NUM_ACTIONS], *other_regrets = new int[NUM_ACTIONS]; 
+        vector<int> my_regrets(NUM_ACTIONS), other_regrets(NUM_ACTIONS); 
 
         for (int i = 0; i < iterations; i++) {
-            // Get regret-matched mixed-strategy actions
-            my_strategy = get_strategy(my_regretSum);
-            other_strategy = get_strategy(other_regretSum);
+            my_strategy = get_strategy(myRegretSum);
+            other_strategy = get_strategy(otherRegretSum);
 
-            my_strategySum = add_arrays(my_strategySum, my_strategy, NUM_ACTIONS);
-            other_strategySum = add_arrays(other_strategySum, other_strategy, NUM_ACTIONS);
+            myStrategySum = sum_arrays(myStrategySum, my_strategy);
+            otherStrategySum = sum_arrays(otherStrategySum, other_strategy);
 
             my_action = get_action(my_strategy);
             other_action = get_action(other_strategy);
@@ -201,31 +227,48 @@ class Battlefield_Trainer {
             my_regrets = get_regrets(utility_table, my_action, other_action);
             other_regrets = get_regrets(utility_table, other_action, my_action);
 
-            my_regretSum = add_arrays(my_regretSum, my_regrets, NUM_ACTIONS);
-            other_regretSum = add_arrays(other_regretSum, other_regrets, NUM_ACTIONS);
+            myRegretSum = sum_arrays(myRegretSum, my_regrets);
+            otherRegretSum = sum_arrays(otherRegretSum, other_regrets);
 
-            my_avgStrategy = get_average_strategy(my_strategySum);
-            other_avgStrategy = get_average_strategy(other_strategySum);
+            myAvgStrategy = get_average_strategy(myStrategySum);
+            otherAvgStrategy = get_average_strategy(otherStrategySum);
         }
+
+        post_train();
+    }
+    typedef vector<float>::const_iterator myiter;
+    vector<pair<size_t, myiter>> get_reverse_ordering(const vector<float>& index) {
+        vector<pair<size_t, myiter>> order(index.size());
+        size_t n = 0;
+        for (myiter it = index.begin(); it != index.end(); ++it, ++n) {
+            order[n] = make_pair(n, it);
+        }
+        struct ordering {
+            bool operator ()(pair<size_t, myiter> const& a, pair<size_t, myiter> const& b) {
+                return *(a.second) > *(b.second);
+            }
+        };
+        sort(order.begin(), order.end(), ordering());
+        return order;
+    }
+
+    template <typename T>
+    vector<T> sort_from_ref(vector<T> const& in, vector<pair<size_t, myiter>> const& reference) {
+        vector<T> ret(in.size());
+        size_t const size = in.size();
+        for (size_t i = 0; i < size; ++i) {
+            ret[i] = in[reference[i].first];
+        }
+        return ret;
     }
 
     void print_stragies() {
         cout.precision(2);
+        cout << "                ";
+        print_vector(sorted_layouts);
         cout << "My strategy:    ";
-        print_array(my_avgStrategy, NUM_ACTIONS);
+        print_vector(sorted_myAvgStrategy);
         cout << "Other strategy: ";
-        print_array(other_avgStrategy, NUM_ACTIONS);
+        print_vector(sorted_otherAvgStrategy);
     }
-
-    // void sort_results(int* index, float* values) {
-    //     typedef vector<int>::const_iterator myiter;
-
-    //     vector<pair<size_t, myiter>> order(NUM_ACTIONS);
-
-    //     size_t n = 0;
-    //     for (myiter it = index.begin(); it != Index.end(); ++it, ++n)
-    //         order[n] = make_pair(n, it);
-
-   
-    // }
-    };
+};
