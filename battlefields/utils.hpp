@@ -40,13 +40,14 @@ const int nChoosek(int n, int k ) {
 
 class Battlefield_Trainer {
     public:
-    int SOLDIERS, BATTLEFIELDS, NUM_ACTIONS;
+    int SOLDIERS, BATTLEFIELDS;
     Battlefield_Trainer(const int& S, const int& N, int seed=0) {
         srand(seed);
         SOLDIERS = S;
         BATTLEFIELDS = N;
-        NUM_ACTIONS = nChoosek(SOLDIERS + BATTLEFIELDS - 1, BATTLEFIELDS - 1);
+        // NUM_ACTIONS = nChoosek(SOLDIERS + BATTLEFIELDS - 1, BATTLEFIELDS - 1);
     }
+    const int NUM_ACTIONS = 21;
 
     vector<string> layouts;
     vector<int*> utility_table;
@@ -125,12 +126,14 @@ class Battlefield_Trainer {
 
         int utility = 0;
         int soldier_diff;
-        for (int i=0; i<NUM_ACTIONS; i++) {
+        for (int i=0; i<BATTLEFIELDS; i++) {
             soldier_diff = my_layout[i] - other_layout[i];
             if (soldier_diff > 0) utility++;
             else if (soldier_diff < 0) utility--;
         }
-        return utility;
+        if (utility > 0) return 1;
+        if (utility < 0) return -1;
+        else return 0;
     }
 
 
@@ -155,7 +158,7 @@ class Battlefield_Trainer {
 
         int my_utility = possible_utilities[my_action];
         for (int a = 0; a < NUM_ACTIONS; a++) {
-            regrets[a] -= my_utility;
+            regrets[a] = possible_utilities[a] - my_utility;
         }
         return regrets;
     }
@@ -207,10 +210,22 @@ class Battlefield_Trainer {
     }
 
     void print_stragies() {
+        cout.precision(2);
         cout << "My strategy:    ";
         print_array(my_avgStrategy, NUM_ACTIONS);
         cout << "Other strategy: ";
         print_array(other_avgStrategy, NUM_ACTIONS);
     }
 
-};
+    // void sort_results(int* index, float* values) {
+    //     typedef vector<int>::const_iterator myiter;
+
+    //     vector<pair<size_t, myiter>> order(NUM_ACTIONS);
+
+    //     size_t n = 0;
+    //     for (myiter it = index.begin(); it != Index.end(); ++it, ++n)
+    //         order[n] = make_pair(n, it);
+
+   
+    // }
+    };
