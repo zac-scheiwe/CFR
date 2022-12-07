@@ -6,18 +6,9 @@
 #include <algorithm>
 using namespace std;
 
-float get_random_decimal() {
-    return (float) rand()/RAND_MAX;
-}
 
-template <typename T>
-void print_vector(T& vec) {
-    for (int i=0; i<vec.size(); i++) {
-        // cout << vec[i] << " ";
-        cout << setw(6) << vec[i] << " ";
-    }
-    cout << "\n";
-}
+
+
 
 template <typename T>
 T sum_arrays(T& a, T& b) {
