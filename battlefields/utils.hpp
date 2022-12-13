@@ -26,7 +26,6 @@ T sum_arrays(T& a, T& b) {
         result[i] = a[i] + b[i];
     }
     return result;
-    // transform(a.begin(), a.end(), b.begin(), a.begin(), plus<int>());
 }
 
 const int nChoosek(int n, int k ) {
