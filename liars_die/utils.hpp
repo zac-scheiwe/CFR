@@ -1,167 +1,226 @@
-#include <vector>
-#include <map>
-#include <string>
 #include <iostream>
+#include <vector>
 #include <iomanip>
+
 using namespace std;
 
-float get_random_decimal() {
-    return (float) rand()/RAND_MAX;
-}
+// float get_random_decimal() {
+//     return (float) rand()/RAND_MAX;
+// }
 
 int get_random_integer(const int& exclusive_max, const int& inclusive_min=0) {
-    return rand() % exclusive_max; 
+    return rand() % (exclusive_max - inclusive_min) + inclusive_min; 
 }
 
 template <typename T>
 void print_vector(T& vec) {
+    cout.precision(2);
     for (int i=0; i<vec.size(); i++) {
-        // cout << vec[i] << " ";
-        cout << setw(6) << vec[i] << " ";
+        cout << setw(10) << vec[i] << " ";
     }
     cout << "\n";
 }
 
-class Kuhn_Trainer {
+class LiarDieTrainer {
     public:
-    // Kuhn Poker definitions
-    int PASS = 0, BET = 1;
-    static const int NUM_ACTIONS = 2;
-    float random = get_random_decimal();
-    // Information set node class definition
+    // Liar Die definitions
+    static const int DOUBT = 0, ACCEPT = 1;
+    int sides;
+
+    // Liar Die player decision node
     class Node {
         public:
-        // Kuhn node definitions
-        string infoSet;
+        // Liar Die node definitions
         vector<float> regretSum, strategy, strategySum;
-        Node() {
+        float u, pPlayer, pOpponent;
+
+        // Liar Die node constructor
+        Node(int NUM_ACTIONS) {
             this->regretSum.resize(NUM_ACTIONS);
             this->strategy.resize(NUM_ACTIONS);
             this->strategySum.resize(NUM_ACTIONS);
         }
-        // Get current information set mixed strategy through regret-matching
-        vector<float> getStrategy(float realizationWeight) {
-            float normalizingSum = 0.0;
-            for (int a = 0; a < NUM_ACTIONS; a++) {
-                strategy[a] = regretSum[a] > 0 ? regretSum[a] : 0;
+
+        // Get Liar Die node current mixed strategy through regret-matching
+        vector<float> getStrategy() {
+            float normalizingSum = 0;
+            for (int a = 0; a < strategy.size(); a++) {
+                strategy[a] = max(regretSum[a], (float) 0);
                 normalizingSum += strategy[a];
             }
-            for (int a = 0; a < NUM_ACTIONS; a++) {
-                if (normalizingSum > 0) {
+            for (int a = 0; a < strategy.size(); a++) {
+                if (normalizingSum > 0)
                     strategy[a] /= normalizingSum;
-                } else {
-                    strategy[a] = 1.0 / NUM_ACTIONS;
-                }
-                strategySum[a] += realizationWeight * strategy[a];
+                else
+                    strategy[a] = 1.0/strategy.size();
             }
+            for (int a = 0; a < strategy.size(); a++)
+                strategySum[a] += pPlayer * strategy[a];
             return strategy;
         }
-        // Get average information set mixed strategy across all training iterations
+
+        // Get Liar Die node average mixed strategy
         vector<float> getAverageStrategy() {
-            vector<float> avgStrategy(NUM_ACTIONS);
             float normalizingSum = 0;
-            for (int a = 0; a < NUM_ACTIONS; a++) {
+            for (int a = 0; a < strategySum.size(); a++)
                 normalizingSum += strategySum[a];
-            }
-            for (int a = 0; a < NUM_ACTIONS; a++) {
-                if (normalizingSum > 0) {
-                    avgStrategy[a] = strategySum[a] / normalizingSum;
-                } else {
-                    avgStrategy[a] = 1.0 / NUM_ACTIONS;
-                }
-            }
-            return avgStrategy;
+            for (int a = 0; a < strategySum.size(); a++)
+                if (normalizingSum > 0)
+                    strategySum[a] /= normalizingSum;
+                else
+                    strategySum[a] = 1.0 / strategySum.size();
+            return strategySum;
         }
-        // // Get information set string representation
-        // string toString() {
-        //     return string.format("%4s: %s", infoSet, Arrays.toString(getAverageStrategy()));
-        // }
     };
 
-    map<string, Node*> nodeMap;
-    // Train Kuhn
-    void train(int iterations) {
-        vector<int> cards = {1, 2, 3};
-        float util = 0;
-        int c2, tmp;
-        for (int i = 0; i < iterations; i++) {
-            // Shuffle cards
-            for (int c1 = cards.size() - 1; c1 > 0; c1--) {
-                c2 = get_random_integer(c1 + 1);
-                tmp = cards[c1];
-                cards[c1] = cards[c2];
-                cards[c2] = tmp;
-            }
-            util += cfr(cards, "", 1, 1);
+    vector<vector<Node*>> responseNodes;
+    vector<vector<Node*>> claimNodes;
+
+    // Construct trainer and allocate player decision nodes
+    LiarDieTrainer(int sides) {
+        this->sides = sides;
+        
+        this->responseNodes.resize(sides+1);
+        for (int myClaim = 0; myClaim <= sides; myClaim++) {
+            this->responseNodes[myClaim].resize(sides+1);
+            for (int oppClaim = myClaim + 1; oppClaim <= sides; oppClaim++)
+                responseNodes[myClaim][oppClaim] = new Node((oppClaim == 0 || oppClaim == sides) ? 1 : 2);
         }
-        post_train();
+
+        this->claimNodes.resize(sides);
+        for (int oppClaim = 0; oppClaim < sides; oppClaim++) {
+            this->claimNodes[oppClaim].resize(sides+1);
+            for (int roll = 1; roll <= sides; roll++)
+                this->claimNodes[oppClaim][roll] = new Node(sides - oppClaim);
+        }
     }
 
-    void post_train() {
+    // Train with FSICFR
+    void train(int iterations) {
+        vector<float> regret(sides);
+        vector<int> rollAfterAcceptingClaim(sides);
+        for (int iter = 0; iter < iterations; iter++) {
+            // Initialize rolls and starting probabilities
+            for (int i = 0; i < rollAfterAcceptingClaim.size(); i++)
+                rollAfterAcceptingClaim[i] = get_random_integer(sides+1, 1);
+            this->claimNodes[0][rollAfterAcceptingClaim[0]]->pPlayer = 1;
+            this->claimNodes[0][rollAfterAcceptingClaim[0]]->pOpponent = 1;
+
+            // Accumulate realization weights forward
+            for (int oppClaim = 0; oppClaim <= sides; oppClaim++) {
+                // Visit response nodes forward
+                if (oppClaim > 0)
+                    for (int myClaim = 0; myClaim < oppClaim; myClaim++) {
+                        Node* node = responseNodes[myClaim][oppClaim];
+                        vector<float> actionProb = node->getStrategy();
+                        if (oppClaim < sides) {
+                            Node* nextNode = claimNodes[oppClaim][rollAfterAcceptingClaim[oppClaim]];
+                            nextNode->pPlayer += actionProb[1] * node->pPlayer;
+                            nextNode->pOpponent += node->pOpponent;
+                        }
+                    }
+            
+                // Visit claim nodes forward
+                if (oppClaim < sides) {
+                    Node* node = claimNodes[oppClaim][rollAfterAcceptingClaim[oppClaim]];
+                    vector<float> actionProb = node->getStrategy();
+                    for (int myClaim = oppClaim + 1; myClaim <= sides; myClaim++) {
+                        float nextClaimProb = actionProb[myClaim - oppClaim - 1];
+                        if (nextClaimProb > 0) {
+                            Node* nextNode = responseNodes[oppClaim][myClaim];
+                            nextNode->pPlayer += node->pOpponent;
+                            nextNode->pOpponent += nextClaimProb * node->pPlayer;
+                        }
+                    }
+                }
+            }
+
+            // Backpropagate utilities, adjusting regrets and strategies
+            for (int oppClaim = sides; oppClaim >= 0; oppClaim--) {
+                // Visit claim nodes backward
+                if (oppClaim < sides) {
+                    Node* node = claimNodes[oppClaim][rollAfterAcceptingClaim[oppClaim]];
+                    vector<float> actionProb = node->strategy;
+                    node->u = 0.0;
+                    for (int myClaim = oppClaim + 1; myClaim <= sides; myClaim++) {
+                        int actionIndex = myClaim - oppClaim - 1;
+                        Node* nextNode = responseNodes[oppClaim][myClaim];
+                        float childUtil = - nextNode->u;
+                        regret[actionIndex] = childUtil;
+                        node->u += actionProb[actionIndex] * childUtil;
+                    }
+                    for (int a = 0; a < actionProb.size(); a++) {
+                        regret[a] -= node->u;
+                        node->regretSum[a] += node->pOpponent * regret[a];
+                    }
+                    node->pPlayer = node->pOpponent = 0;
+                }
+
+                // Visit response nodes backward
+                if (oppClaim > 0)
+                    for (int myClaim = 0; myClaim < oppClaim; myClaim++) {
+                        Node* node = responseNodes[myClaim][oppClaim];
+                        vector<float> actionProb = node->strategy;
+                        node->u = 0.0;
+                        float doubtUtil = (oppClaim > rollAfterAcceptingClaim[myClaim]) ? 1 : -1;
+                        regret[DOUBT] = doubtUtil;
+                        node->u += actionProb[DOUBT] * doubtUtil;
+                        if (oppClaim < sides) {
+                            Node* nextNode = claimNodes[oppClaim][rollAfterAcceptingClaim[oppClaim]];
+                            regret[ACCEPT] = nextNode->u;
+                            node->u += actionProb[ACCEPT] * nextNode->u;
+                        }
+                        for (int a = 0; a < actionProb.size(); a++) {
+                            regret[a] -= node->u;
+                            node->regretSum[a] += node->pOpponent * regret[a];
+                        }
+                        node->pPlayer = node->pOpponent = 0;
+                    }
+            }
+
+            // Reset strategy sums after half of training
+            if (iter == iterations / 2) {
+                for (auto nodes : responseNodes)
+                    for (auto node : nodes)
+                        if (node != nullptr)
+                            // fill_n(node->strategySum.begin(), node->strategySum.end(), 0);
+                            for (int a = 0; a < node->strategySum.size(); a++)
+                                node->strategySum[a] = 0;
+
+                for (auto nodes : claimNodes)
+                    for (auto node : nodes)
+                        if (node != nullptr)
+                            for (int a = 0; a < node->strategySum.size(); a++)
+                                node->strategySum[a] = 0;
+            }
+        }
     }
 
     void print_strategies() {
-        // cout << "Average game value: " << util / iterations;
-        // for(std::map<string, Node*>::iterator it = nodeMap.begin(); it != nodeMap.end(); ++it) {
-        //     cout << it->first << ": ";
-        //     print_vector(it->second->regretSum);
-        // }
+        // Print resulting strategy
+        for (int initialRoll = 1; initialRoll <= sides; initialRoll++) {
+            printf("Initial claim policy with roll %d: ", initialRoll);
+            for (auto& prob : claimNodes[0][initialRoll]->getAverageStrategy())
+                printf("%.2f ", prob);
+            printf("\n");
+        }
+        vector<string> headings = {"Old Claim", "New Claim", "Doubt", "Accept"};
+        print_vector(headings);
         vector<float> avg_strategy;
-        for(std::map<string, Node*>::iterator it = nodeMap.begin(); it != nodeMap.end(); ++it) {
-            cout << it->first << ": ";
-            avg_strategy = it->second->getAverageStrategy();
-            print_vector(avg_strategy);
-        }
-    }
-    
-    // Counterfactual regret minimization iteration
-    float cfr(vector<int> cards, string history, float p0, float p1) {
-        int plays = history.length();
-        int player = plays % 2;
-        int opponent = 1 - player;
-        // Return payoff for terminal states
-        if (plays > 1) {
-            bool terminalPass = (history[plays - 1] == 'p');
-            bool floatBet = history.substr(plays - 2, plays) == "bb";
-            bool isPlayerCardHigher = cards[player] > cards[opponent];
-            if (terminalPass) {
-                if (history == "pp") {
-                    return isPlayerCardHigher ? 1 : -1;
-                } else {
-                    return 1;
-                }
-            } else if (floatBet) {
-                return isPlayerCardHigher ? 2 : -2;
+        for (int myClaim = 0; myClaim <= sides; myClaim++)
+            for (int oppClaim = myClaim + 1; oppClaim <= sides; oppClaim++) {   
+                printf("\t%d\t%d\t", myClaim, oppClaim);
+                avg_strategy = responseNodes[myClaim][oppClaim]->getAverageStrategy();
+                print_vector(avg_strategy);
             }
-        }
-        string infoSet = to_string(cards[player]) + history;
-        // Get information set node or create it if nonexistant
-        Node* node;
-        if (nodeMap.find(infoSet) == nodeMap.end()) {  // not found
-            node = new Node();
-            node->infoSet = infoSet;
-            nodeMap[infoSet] = node;
-        } else {  // found
-            node = nodeMap[infoSet];
-        }
-        // For each action, recursively call cfr with additional history and probability
-        vector<float> strategy = node->getStrategy(player == 0 ? p0 : p1);
-        vector<float> util;
-        float nodeUtil = 0.0;
-        string nextHistory;
-        for (int a = 0; a < NUM_ACTIONS; a++) {
-            nextHistory = history + (a == 0 ? "p" : "b");
-            util.push_back(player == 0
-            ? - cfr(cards, nextHistory, p0 * strategy[a], p1)
-            : - cfr(cards, nextHistory, p0, p1 * strategy[a]));
-            nodeUtil += strategy[a] * util[a];
-        }
-        // For each action, compute and accumulate counterfactual regret
-        float regret;
-        for (int a = 0; a < NUM_ACTIONS; a++) {
-            regret = util[a] - nodeUtil;
-            node->regretSum[a] += (player == 0 ? p1 : p0) * regret;
-        }
-        return nodeUtil;
+        headings = {"Old Claim", "Roll", "Action Probablities"};
+        print_vector(headings);
+        printf("\nOld Claim\tRoll\tAction Probabilities\n");
+        for (int oppClaim = 0; oppClaim < sides; oppClaim++)
+            for (int roll = 1; roll <= sides; roll++) {
+                printf("%d\t%d\t", oppClaim, roll);
+                avg_strategy = claimNodes[oppClaim][roll]->getAverageStrategy();
+                print_vector(avg_strategy);
+            }
     }
 };
