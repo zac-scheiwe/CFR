@@ -10,7 +10,7 @@ float get_random_decimal() {
 }
 
 int get_random_integer(const int& exclusive_max, const int& inclusive_min=0) {
-    return rand() % exclusive_max; 
+    return rand() % (exclusive_max - inclusive_min) + inclusive_min; 
 }
 
 template <typename T>
