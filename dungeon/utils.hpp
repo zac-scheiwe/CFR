@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <set>
 #include <iomanip>
 
 using namespace std;
@@ -18,9 +19,9 @@ void print_vector(T& vec) {
 }
 
 class Deck {
-    public:
     vector<int> cards = {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 9};
 
+    public:
     Deck() {
         shuffle();
     }
@@ -46,4 +47,9 @@ class Deck {
     }
 };
 
+struct Dungeon {
+    multiset<int, less<int>> known_cards = {};
+    int num_unknown_cards = 0;
+    set<int> items = {0, 1, 2, 3, 4, 5};
+};
 
